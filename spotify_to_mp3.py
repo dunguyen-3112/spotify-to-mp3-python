@@ -10,8 +10,9 @@ import multiprocessing
 
 # **************PLEASE READ THE README.md FOR USE INSTRUCTIONS**************
 
+
 def write_tracks(text_file: str, tracks: dict):
-    # Writes the information of all tracks in the playlist to a text file. 
+    # Writes the information of all tracks in the playlist to a text file.
     # This includins the name, artist, and spotify URL. Each is delimited by a comma.
     with open(text_file, 'w+', encoding='utf-8') as file_out:
         while True:
@@ -32,7 +33,7 @@ def write_tracks(text_file: str, tracks: dict):
                             most likely due to this song having a non-English name.".format(track_name))
                 except KeyError:
                     print(u'Skipping track {0} by {1} (local only?)'.format(
-                            track['name'], track['artists'][0]['name']))
+                        track['name'], track['artists'][0]['name']))
             # 1 page = 50 results, check if there are more pages
             if tracks['next']:
                 tracks = spotify.next(tracks)
@@ -41,10 +42,12 @@ def write_tracks(text_file: str, tracks: dict):
 
 
 def write_playlist(username: str, playlist_id: str):
-    results = spotify.user_playlist(username, playlist_id, fields='tracks,next,name')
+    results = spotify.user_playlist(
+        username, playlist_id, fields='tracks,next,name')
     playlist_name = results['name']
     text_file = u'{0}.txt'.format(playlist_name, ok='-_()[]{}')
-    print(u'Writing {0} tracks to {1}.'.format(results['tracks']['total'], text_file))
+    print(u'Writing {0} tracks to {1}.'.format(
+        results['tracks']['total'], text_file))
     tracks = results['tracks']
     write_tracks(text_file, tracks)
     return playlist_name
@@ -54,22 +57,30 @@ def find_and_download_songs(reference_file: str):
     TOTAL_ATTEMPTS = 10
     with open(reference_file, "r", encoding='utf-8') as file:
         for line in file:
-            temp = line.split(",")
-            name, artist = temp[0], temp[1]
-            text_to_search = artist + " - " + name
-            best_url = None
-            attempts_left = TOTAL_ATTEMPTS
-            while attempts_left > 0:
-                try:
-                    results_list = YoutubeSearch(text_to_search, max_results=1).to_dict()
-                    best_url = "https://www.youtube.com{}".format(results_list[0]['url_suffix'])
-                    break
-                except IndexError:
-                    attempts_left -= 1
-                    print("No valid URLs found for {}, trying again ({} attempts left).".format(
-                        text_to_search, attempts_left))
+            try:
+                temp = line.split(",")
+                name, artist = temp[0], temp[1]
+                text_to_search = artist + " - " + name
+                best_url = None
+                attempts_left = TOTAL_ATTEMPTS
+                while attempts_left > 0:
+                    try:
+                        results_list = YoutubeSearch(
+                            text_to_search, max_results=1).to_dict()
+                        best_url = "https://www.youtube.com{}".format(
+                            results_list[0]['url_suffix'])
+                        break
+                    except IndexError:
+                        attempts_left -= 1
+                        print("No valid URLs found for {}, trying again ({} attempts left).".format(
+                            text_to_search, attempts_left))
+            except Exception as e:
+                print(e)
+                continue
+
             if best_url is None:
-                print("No valid URLs found for {}, skipping track.".format(text_to_search))
+                print("No valid URLs found for {}, skipping track.".format(
+                    text_to_search))
                 continue
             # Run you-get to fetch and download the link's audio
             print("Initiating download for {}.".format(text_to_search))
@@ -77,7 +88,7 @@ def find_and_download_songs(reference_file: str):
                 'format': 'bestaudio/best',
                 'postprocessors': [{
                     'key': 'FFmpegExtractAudio',
-                    'preferredcodec': 'mp3',
+                    'preferredcodec': 'wav',
                     'preferredquality': '192',
                 }],
             }
@@ -89,7 +100,7 @@ def find_and_download_songs(reference_file: str):
 # This method is responsible for manging and distributing the multi-core workload
 def multicore_find_and_download_songs(reference_file: str, cpu_count: int):
     # Extract songs from the reference file
-    
+
     lines = []
     with open(reference_file, "r", encoding='utf-8') as file:
         for line in file:
@@ -121,13 +132,14 @@ def multicore_find_and_download_songs(reference_file: str, cpu_count: int):
         segment = lines[index:right]
         index = index + cpu
         file_segments.append(segment)
-    
+
     # Prepares all of the seperate processes before starting them
     # Pass each process a new shorter list of songs vs 1 process being handed all of the songs
     processes = []
     segment_index = 0
     for segment in file_segments:
-        p = multiprocessing.Process(target = multicore_handler, args=(segment, segment_index,))
+        p = multiprocessing.Process(
+            target=multicore_handler, args=(segment, segment_index,))
         processes.append(p)
         segment_index = segment_index + 1
 
@@ -141,20 +153,22 @@ def multicore_find_and_download_songs(reference_file: str, cpu_count: int):
 
 # Just a wrapper around the original find_and_download_songs method to ensure future compatibility
 # Preserves the same functionality just allows for several shorter lists to be used and cleaned up
+
+
 def multicore_handler(reference_list: list, segment_index: int):
     # Create reference filename based off of the process id (segment_index)
     reference_filename = "{}.txt".format(segment_index)
-    
+
     # Write the reference_list to a new "reference_file" to enable compatibility
     with open(reference_filename, 'w+', encoding='utf-8') as file_out:
         for line in reference_list:
             file_out.write(line)
 
     # Call the original find_and_download method
-    find_and_download_songs(reference_filename)    
+    find_and_download_songs(reference_filename)
 
     # Clean up the extra list that was generated
-    if(os.path.exists(reference_filename)):
+    if (os.path.exists(reference_filename)):
         os.remove(reference_filename)
 
 
@@ -167,35 +181,40 @@ def enable_multicore(autoenable=False, maxcores=None, buffercores=1):
     native_cpu_count = multiprocessing.cpu_count() - buffercores
     if autoenable:
         if maxcores:
-            if(maxcores <= native_cpu_count):
+            if (maxcores <= native_cpu_count):
                 return maxcores
             else:
                 print("Too many cores requested, single core operation fallback")
                 return 1
         return multiprocessing.cpu_count() - 1
     multicore_query = input("Enable multiprocessing (Y or N): ")
-    if multicore_query not in ["Y","y","Yes","YES","YEs",'yes']:
+    if multicore_query not in ["Y", "y", "Yes", "YES", "YEs", 'yes']:
         return 1
     core_count_query = int(input("Max core count (0 for allcores): "))
-    if(core_count_query == 0):
+    if (core_count_query == 0):
         return native_cpu_count
-    if(core_count_query <= native_cpu_count):
+    if (core_count_query <= native_cpu_count):
         return core_count_query
     else:
         print("Too many cores requested, single core operation fallback")
         return 1
 
+
 if __name__ == "__main__":
     # Parameters
-    print("Please read README.md for use instructions.")    
-    client_id = input("Client ID: ")
-    client_secret = input("Client secret: ")
-    username = input("Spotify username: ")
+    print("Please read README.md for use instructions.")
+    client_id = '84417ca71e6a4f4095d84ad9688f1c10'  # input("Client ID: ")
+    # input("Client secret: ")
+    client_secret = '3281f08d92ab4e479dcba14972dfbcea'
+    username = 'vnsckxwlthvmtw43uq2jyjeie'  # input("Spotify username: ")
     playlist_uri = input("Playlist URI/Link: ")
     if playlist_uri.find("https://open.spotify.com/playlist/") != -1:
-        playlist_uri = playlist_uri.replace("https://open.spotify.com/playlist/", "")
-    multicore_support = enable_multicore(autoenable=False, maxcores=None, buffercores=1)
-    auth_manager = oauth2.SpotifyClientCredentials(client_id=client_id, client_secret=client_secret)
+        playlist_uri = playlist_uri.replace(
+            "https://open.spotify.com/playlist/", "")
+    multicore_support = enable_multicore(
+        autoenable=False, maxcores=None, buffercores=1)
+    auth_manager = oauth2.SpotifyClientCredentials(
+        client_id=client_id, client_secret=client_secret)
     spotify = spotipy.Spotify(auth_manager=auth_manager)
     playlist_name = write_playlist(username, playlist_uri)
     reference_file = "{}.txt".format(playlist_name)
